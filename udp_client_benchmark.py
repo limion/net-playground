@@ -1,4 +1,3 @@
-import socket
 import asyncio
 import time
 import random
@@ -19,7 +18,7 @@ class EchoClientProtocol:
         self.transport = transport
         self.transport.sendto(self.message)
 
-    def datagram_received(self, data, attr):
+    def datagram_received(self, data, addr):
         self.result = uppercased_echo_successful(self.message, data)
         self.transport.close()
 
@@ -135,6 +134,7 @@ async def main(
 if __name__ == "__main__":
     import argparse
     import sys
+    import socket
 
     random.seed(444)
     parser = argparse.ArgumentParser()
@@ -191,7 +191,7 @@ if __name__ == "__main__":
     }
     results = ([], [], [])
     print(
-        f"""Host: {args["host"]}({ip_addr})
+        f"""Host: {args["host"]} ({ip_addr})
 Requests: {params['requests']}
 Concurrency: {params['concurrency']}
 Timeout: {params['timeout']} sec"""
