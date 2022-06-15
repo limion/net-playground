@@ -38,4 +38,5 @@ if __name__ == "__main__":
     except socket.gaierror:
         print("Unknown host: ", args["host"])
         sys.exit(1)
+
     asyncio.run(server(ip_addr, args["port"]))
