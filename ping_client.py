@@ -37,8 +37,7 @@ def checksum(payload):
     int_steps = (int(len(payload) / 2)) * 2
     result_sum = 0
     step = 0
-    # Calculate sum of two byte integers
-    # taking endiannes into account
+    # Calculate the sum of two byte integers taking the endiannes of the host into account
     lo_byte = 0
     hi_byte = 0
     while step < int_steps:
@@ -49,7 +48,7 @@ def checksum(payload):
         number = hi_byte * 256 + lo_byte
         result_sum += number
         step += 2
-    # Handle the last byte if string length is odd
+    # Handle the last byte if the length of the payload is odd
     if int_steps < len(payload):
         number = payload[-1]
         result_sum += number
@@ -61,7 +60,7 @@ def checksum(payload):
     result_sum = (result_sum >> 16) + (result_sum & 0xFFFF)
     # Take the 1's complement of the final sum (flip the bits)
     complement = ~result_sum
-    # Cut the result to 16 bit, because we do calculation on a system that has more than 16 bit,
+    # Cut the result to 16 bits, because we do calculation on a system that has more than 16 bits
     # and it means we got a negative integer as a result
     complement &= 0xFFFF
     # Convert two byte int from the host format to the network format (big-endian)
@@ -90,7 +89,7 @@ def make_packet():
 
 def extract_icmp_header_and_data(packet):
     """
-    Parse icmp packet header to dict
+    Parse icmp packet header to dict and return it along with data part
     """
     p = struct.unpack("!BBHHH", packet[:8])
 
@@ -105,7 +104,7 @@ def extract_icmp_header_and_data(packet):
 
 def extract_ip_header_and_data(packet):
     """
-    Parse ip packet header to dict
+    Parse ip packet header to dict and return it along with data part
     """
     p = struct.unpack("!BBHHHBBHII", packet[:20])
 
