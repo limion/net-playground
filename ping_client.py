@@ -24,6 +24,7 @@ Thanx to https://github.com/satoshi03/pings
 import sys
 import socket
 import struct
+from select import select
 
 ICMP_ECHO_TYPE = 8
 ICMP_ECHO_CODE = 0
@@ -121,7 +122,7 @@ def extract_ip_header_and_data(packet):
     return [ip_header, packet[20:]]
 
 
-def ping(host):
+def ping(host: str, timeout: int):
     try:
         ip_addr = socket.gethostbyname(host)
     except socket.gaierror:
@@ -152,6 +153,13 @@ def ping(host):
     print("ICMP Header:\n", icmp_request_header)
     print("ICMP Data:\n", icmp_request_data)
     client_socket.sendto(icmp_packet, (ip_addr, 0))
+
+    r, w, e = select([client_socket], [], [], timeout)
+    if len(r) == 0:
+        # timeout
+        print("\nRequest timeout")
+        sys.exit()
+
     # As a response we get a whole IP packet, because of socket.SOCK_RAW
     ip_packet, (address, port) = client_socket.recvfrom(2048)
     print(f"\nResponse from {address}")
@@ -170,6 +178,14 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-t",
+        "--timeout",
+        dest="timeout",
+        type=int,
+        default=1,
+        help="timeout in seconds",
+    )
     parser.add_argument("host")
     ns = parser.parse_args()
     ping(**ns.__dict__)
