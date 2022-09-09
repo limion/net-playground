@@ -67,6 +67,22 @@ Resource record format:
 /                     RDATA                     /
 /                                               /
 +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+
+In order to reduce the size of messages, the domain system utilizes a
+compression scheme which eliminates the repetition of domain names in a
+message.  In this scheme, an entire domain name or a list of labels at
+the end of a domain name is replaced with a pointer to a prior occurance
+of the same name.
+
+The pointer takes the form of a two octet sequence:
+
++--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+| 1  1|                OFFSET                   |
++--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
+
+The OFFSET field specifies an offset from
+the start of the message (i.e., the first octet of the ID field in the
+domain header).
 */
 
 import dgram from "node:dgram";
@@ -167,7 +183,7 @@ function extractResourceRecord(msg, offset) {
     "ttl (seconds)": buf.readUInt32BE(6),
     rdLength,
     ip: buf
-      .subarray(12, 16)
+      .subarray(12, 12 + rdLength)
       .map((byte) => byte.toString(10))
       .join("."),
   };
