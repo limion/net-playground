@@ -1,6 +1,7 @@
 /**
 Simple DNS client for learning purposes.
 Let's implement the Question for the A record
+It works correctly only with the Answers of the A type
 
 The top level format of message is divided
 into 5 sections (some of which are empty in certain cases) shown below:
