@@ -1,3 +1,8 @@
+"""
+It should be noted that the whithout using async I/O in handler
+there is no much difference between the sync and async versions
+"""
+
 import asyncio
 
 
