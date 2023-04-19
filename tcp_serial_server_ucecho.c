@@ -9,7 +9,7 @@
 #define PORT 8080
 #define MAX_CLIENTS 5
 
-void handle_client(int server_socket)
+void handle_request(int server_socket)
 {
     struct sockaddr_in client_addr;
     unsigned int client_addr_size = sizeof(client_addr);
@@ -72,7 +72,7 @@ int main()
 
     for (;;)
     {
-        handle_client(server_socket);
+        handle_request(server_socket);
     }
 
     return 0;
