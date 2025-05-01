@@ -21,8 +21,8 @@ var success []SuccessResult
 var failure []error
 
 var tr *http.Transport = &http.Transport{
-	MaxIdleConns:        1000,
-	MaxConnsPerHost:     1000,
+	MaxIdleConns:        0,
+	MaxConnsPerHost:     0,
 	IdleConnTimeout:     90 * time.Second,
 	DisableKeepAlives:   false,
 	WriteBufferSize:     8 * 1024, // Reduce buffer size not to exhaust memory
