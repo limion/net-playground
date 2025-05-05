@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -31,8 +32,15 @@ var tr *http.Transport = &http.Transport{
 
 var client *http.Client = &http.Client{Transport: tr}
 
-func doRequest(url string) (int, error) {
-	resp, err := client.Get(url)
+func doRequest(url string, headers []header) (int, error) {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		log.Panic(err)
+	}
+	for _, h := range headers {
+		req.Header.Add(h.key, h.value)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		log.Panic(err)
 	}
@@ -50,10 +58,10 @@ func doRequest(url string) (int, error) {
 	return contentLength, nil
 }
 
-func worker(workerId int, url string, jobs chan int) {
+func worker(workerId int, jobs chan int, url string, headers []header) {
 	for range jobs {
 		startTime := time.Now()
-		contentLength, err := doRequest(url)
+		contentLength, err := doRequest(url, headers)
 		if err != nil {
 			failure = append(failure, err)
 		} else {
@@ -75,10 +83,30 @@ func formatBytes(bytes int) string {
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
+type headerFlagList []string
+
+func (h *headerFlagList) String() string {
+	return strings.Join(*h, ", ")
+}
+
+func (h *headerFlagList) Set(value string) error {
+	*h = append(*h, value)
+	return nil
+}
+
+type header struct {
+	key string
+	value string
+}
+
 func main() {
+
+	var headerFlags headerFlagList
+	var headers []header
 
     conreqPtr := flag.Int("concurrent_requests", 10, "number of concurrent requests")
     totalRequestsPtr := flag.Int("total_requests", 1000, "total number of requests to be made")
+	flag.Var(&headerFlags, "header", "HTTP headers (K=V) to include in the request (can be specified multiple times)")
 
 	// Override the usage output
 	flag.Usage = func() {
@@ -99,6 +127,24 @@ func main() {
     fmt.Println("concurrent_requests:", *conreqPtr)
     fmt.Println("total_requests:", *totalRequestsPtr)
     fmt.Println("url:", url)
+	if (len(headerFlags) > 0) {
+		fmt.Println("headers:")
+		for _, h := range headerFlags {
+			parts := strings.Split(h, "=")
+			if len(parts) != 2 {
+				fmt.Println("Invalid header format. Use K=V")
+				os.Exit(1)
+			}
+			key := strings.TrimSpace(parts[0])
+			value := strings.TrimSpace(parts[1])
+			if key == "" || value == "" {
+				fmt.Println("Invalid header format. Use K=V")
+				os.Exit(1)
+			}
+			headers = append(headers, header{key: key, value: value})
+			fmt.Println(" -", h)
+		}
+	}
 
 	jobs := make(chan int, *totalRequestsPtr)
 
@@ -108,7 +154,7 @@ func main() {
 		wg.Add(1)
 		go func() {
             defer wg.Done()
-            worker(i, url, jobs)
+            worker(i, jobs, url, headers)
         }()
 	}
 
