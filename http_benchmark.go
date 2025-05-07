@@ -32,8 +32,8 @@ var tr *http.Transport = &http.Transport{
 
 var client *http.Client = &http.Client{Transport: tr}
 
-func doRequest(url string, headers []header) (int, error) {
-	req, err := http.NewRequest("GET", url, nil)
+func doRequest(url string, headers []header, method string, body string) (int, error) {
+	req, err := http.NewRequest(strings.ToUpper(method), url, strings.NewReader(body))
 	if err != nil {
 		log.Panic(err)
 	}
@@ -58,10 +58,10 @@ func doRequest(url string, headers []header) (int, error) {
 	return contentLength, nil
 }
 
-func worker(workerId int, jobs chan int, url string, headers []header) {
+func worker(workerId int, jobs chan int, url string, headers []header, method string, body string) {
 	for range jobs {
 		startTime := time.Now()
-		contentLength, err := doRequest(url, headers)
+		contentLength, err := doRequest(url, headers, method, body)
 		if err != nil {
 			failure = append(failure, err)
 		} else {
@@ -106,7 +106,9 @@ func main() {
 
     conreqPtr := flag.Int("concurrent_requests", 10, "number of concurrent requests")
     totalRequestsPtr := flag.Int("total_requests", 1000, "total number of requests to be made")
+    methodPtr := flag.String("method", "get", "request method")
 	flag.Var(&headerFlags, "header", "HTTP headers (K=V) to include in the request (can be specified multiple times)")
+    bodyPtr := flag.String("data", "", "body to send in the request")
 
 	// Override the usage output
 	flag.Usage = func() {
@@ -127,6 +129,7 @@ func main() {
     fmt.Println("concurrent_requests:", *conreqPtr)
     fmt.Println("total_requests:", *totalRequestsPtr)
     fmt.Println("url:", url)
+    fmt.Println("method:",*methodPtr)
 	if (len(headerFlags) > 0) {
 		fmt.Println("headers:")
 		for _, h := range headerFlags {
@@ -145,6 +148,9 @@ func main() {
 			fmt.Println(" -", h)
 		}
 	}
+	if (len(*bodyPtr) > 0) {
+		fmt.Println("body:", *bodyPtr)
+	}
 
 	jobs := make(chan int, *totalRequestsPtr)
 
@@ -154,7 +160,7 @@ func main() {
 		wg.Add(1)
 		go func() {
             defer wg.Done()
-            worker(i, jobs, url, headers)
+            worker(i, jobs, url, headers, *methodPtr, *bodyPtr)
         }()
 	}
 
