@@ -13,13 +13,17 @@ import (
 	"time"
 )
 	
-type SuccessResult struct {
+type Result struct {
+	success bool
     time time.Duration
     contentLength  int
+	err error
 }
 
-var success []SuccessResult
-var failure []error
+var results chan Result = make(chan Result)
+
+var success []Result
+var failure []Result
 
 var tr *http.Transport = &http.Transport{
 	MaxIdleConns:        0,
@@ -63,9 +67,9 @@ func worker(workerId int, jobs chan int, url string, headers []header, method st
 		startTime := time.Now()
 		contentLength, err := doRequest(url, headers, method, body)
 		if err != nil {
-			failure = append(failure, err)
+			results <- Result{success: false, err: err}
 		} else {
-			success = append(success, SuccessResult{time: time.Since(startTime), contentLength: contentLength})
+			results <- Result{success: true, time: time.Since(startTime), contentLength: contentLength}
 		}
 	}
 }
@@ -104,7 +108,7 @@ func main() {
 	var headerFlags headerFlagList
 	var headers []header
 
-    conreqPtr := flag.Int("concurrent_requests", 10, "number of concurrent requests")
+    concurrentRequestsPtr := flag.Int("concurrent_requests", 10, "number of concurrent requests")
     totalRequestsPtr := flag.Int("total_requests", 1000, "total number of requests to be made")
     methodPtr := flag.String("method", "get", "request method")
 	flag.Var(&headerFlags, "header", "HTTP headers (K=V) to include in the request (can be specified multiple times)")
@@ -126,7 +130,7 @@ func main() {
 
 	url := flag.Arg(0)
 
-    fmt.Println("concurrent_requests:", *conreqPtr)
+    fmt.Println("concurrent_requests:", *concurrentRequestsPtr)
     fmt.Println("total_requests:", *totalRequestsPtr)
     fmt.Println("url:", url)
     fmt.Println("method:",*methodPtr)
@@ -156,12 +160,12 @@ func main() {
 
 	var wg sync.WaitGroup
 
-	for i := 0; i < *conreqPtr; i++ {
+	for i := 0; i < *concurrentRequestsPtr; i++ {
 		wg.Add(1)
-		go func() {
+		go func(workerId int) {
             defer wg.Done()
             worker(i, jobs, url, headers, *methodPtr, *bodyPtr)
-        }()
+        }(i)
 	}
 
 	startTime := time.Now()
@@ -176,6 +180,14 @@ func main() {
 	workingTime := time.Since(startTime)
 
 	fmt.Println("All requests completed.")
+
+	for res := range results {
+		if res.success {
+			success = append(success, res)
+		} else {
+			failure = append(failure, res)
+		}
+	}
 
 	// Statistics
 	fmt.Println("Total requests:", len(success)+len(failure))
