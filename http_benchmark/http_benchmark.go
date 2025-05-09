@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -13,30 +14,7 @@ import (
 	"time"
 )
 	
-type Result struct {
-	success bool
-    time time.Duration
-    contentLength  int
-	err error
-}
-
-var results chan Result = make(chan Result)
-
-var success []Result
-var failure []Result
-
-var tr *http.Transport = &http.Transport{
-	MaxIdleConns:        0,
-	MaxConnsPerHost:     0,
-	IdleConnTimeout:     90 * time.Second,
-	DisableKeepAlives:   false,
-	WriteBufferSize:     8 * 1024, // Reduce buffer size not to exhaust memory
-	ReadBufferSize:      8 * 1024, 
-}
-
-var client *http.Client = &http.Client{Transport: tr}
-
-func doRequest(url string, headers []header, method string, body string) (int, error) {
+func doRequest(client *http.Client,  url string, headers []header, method string, body string) (int, error) {
 	req, err := http.NewRequest(strings.ToUpper(method), url, strings.NewReader(body))
 	if err != nil {
 		log.Panic(err)
@@ -48,6 +26,7 @@ func doRequest(url string, headers []header, method string, body string) (int, e
 	if err != nil {
 		log.Panic(err)
 	}
+	io.Copy(io.Discard, resp.Body) //reads the entire body to EOF, clearing the TCP stream.
 	defer resp.Body.Close()
 	if (resp.StatusCode != http.StatusOK) {
 		return -1, errors.New(strconv.Itoa(resp.StatusCode))
@@ -60,18 +39,6 @@ func doRequest(url string, headers []header, method string, body string) (int, e
 		return -1, errors.New("Wrong Content-Length header")
 	}
 	return contentLength, nil
-}
-
-func worker(workerId int, jobs chan int, url string, headers []header, method string, body string) {
-	for range jobs {
-		startTime := time.Now()
-		contentLength, err := doRequest(url, headers, method, body)
-		if err != nil {
-			results <- Result{success: false, err: err}
-		} else {
-			results <- Result{success: true, time: time.Since(startTime), contentLength: contentLength}
-		}
-	}
 }
 
 func formatBytes(bytes int) string {
@@ -156,30 +123,58 @@ func main() {
 		fmt.Println("body:", *bodyPtr)
 	}
 
-	jobs := make(chan int, *totalRequestsPtr)
+	var tr *http.Transport = &http.Transport{
+		MaxIdleConns:        100,
+		MaxConnsPerHost:     *concurrentRequestsPtr,
+		IdleConnTimeout:     60 * time.Second,
+		DisableKeepAlives:   false,
+		WriteBufferSize:     8 * 1024, // Reduce buffer size not to exhaust memory
+		ReadBufferSize:      8 * 1024, 
+	}
+	
+	var client *http.Client = &http.Client{Transport: tr}
+
+	type Result struct {
+		success bool
+		time time.Duration
+		contentLength  int
+		err error
+	}
+	
+	var success []Result
+	var failure []Result
+
+	results := make(chan Result, *totalRequestsPtr)
+	sem := make(chan struct{}, *concurrentRequestsPtr)
 
 	var wg sync.WaitGroup
 
-	for i := 0; i < *concurrentRequestsPtr; i++ {
-		wg.Add(1)
-		go func(workerId int) {
-            defer wg.Done()
-            worker(i, jobs, url, headers, *methodPtr, *bodyPtr)
-        }(i)
-	}
-
 	startTime := time.Now()
 
-	for i := 0; i < *totalRequestsPtr; i++ {
-		jobs <- i
+	for range *totalRequestsPtr {
+		wg.Add(1)
+		sem <- struct{}{}
+
+		go func() {
+            defer wg.Done()
+			defer func() { <-sem }()
+
+			startTime := time.Now()
+			contentLength, err := doRequest(client, url, headers, *methodPtr, *bodyPtr)
+			if err != nil {
+				results <- Result{success: false, err: err}
+			} else {
+				results <- Result{success: true, time: time.Since(startTime), contentLength: contentLength}
+			}
+        }()
 	}
-	close(jobs)
 
 	wg.Wait()
 
 	workingTime := time.Since(startTime)
 
 	fmt.Println("All requests completed.")
+	close(results)
 
 	for res := range results {
 		if res.success {
