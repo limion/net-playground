@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"strconv"
@@ -228,6 +229,13 @@ func main() {
 	}(),
 	)
 	fmt.Println("Total time:", workingTime)
+	fmt.Println("Requests per second:", func() float64 {
+		if workingTime == 0 {
+			return 0
+		}
+		return math.Round(float64(len(success)) / workingTime.Seconds())
+	}(),
+	)	
 	var totalContentLength int
 	for _, result := range success {
 		totalContentLength += result.contentLength
